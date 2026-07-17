@@ -1,18 +1,17 @@
 import os
 import threading
 import telebot
-import google.generativeai as genai
+from google import genai
 from flask import Flask
 
-# Render-এর পোর্ট পোর্ট বাইন্ডিং সমস্যা সমাধানের জন্য Flask সেটআপ
+# পোর্ট বাইন্ডিং সমস্যা সমাধানের জন্য Flask সেটআপ
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Bot is running!"
+    return "Agent is online and running!"
 
 def run_flask():
-    # Render নিজে থেকেই একটি PORT পরিবেশ ভেরিয়েবল দেয়, না থাকলে 8080 ব্যবহার করবে
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
 
@@ -21,20 +20,25 @@ TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-pro')
+# নতুন SDK দিয়ে ক্লায়েন্ট ইনিশিয়ালাইজ করা
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 @bot.message_handler(func=lambda message: True)
 def reply_to_user(message):
     try:
-        response = model.generate_content(message.text)
+        # নতুন মডেল 'gemini-2.5-flash' ব্যবহার করা হচ্ছে যা দ্রুত এবং ফ্রি
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=message.text,
+        )
         bot.reply_to(message, response.text)
     except Exception as e:
+        print(f"Error: {e}")
         bot.reply_to(message, "দুঃখিত, একটু সমস্যা হয়েছে। আবার চেষ্টা করুন।")
 
 if __name__ == "__main__":
-    # Flask সার্ভারটি আলাদা থ্রেডে ব্যাকগ্রাউন্ডে চালু করা হচ্ছে
-    threading.Thread(target=run_flask).start()
+    # Flask সার্ভার ব্যাকগ্রাউন্ডে চালু করা
+    threading.Thread(target=run_flask, daemon=True).start()
     
-    # টেলিগ্রাম বট চালু করা হচ্ছে
+    # টেলিগ্রাম বট পোলিং চালু করা
     bot.infinity_polling()
