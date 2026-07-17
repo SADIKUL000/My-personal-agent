@@ -27,7 +27,7 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 @bot.message_handler(func=lambda message: True)
 def reply_to_user(message):
     try:
-        # এখানে আমরা জেমিনির লেটেস্ট এবং রিকমেন্ডেড মডেল ব্যবহার করছি
+        # এখানে আমরা জেমিনির লেটেস্ট এবং রিকমেন্ডেড 'gemini-2.5-flash' মডেল ব্যবহার করছি
         response = client.models.generate_content(
             model='gemini-2.5-flash', 
             contents=message.text,
