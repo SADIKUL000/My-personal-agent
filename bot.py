@@ -21,15 +21,15 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
-# Gemini Client সেটআপ
+# নতুন জেমিনি ক্লায়েন্ট ইনিশিয়েট করা
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 @bot.message_handler(func=lambda message: True)
 def reply_to_user(message):
     try:
-        # গুগলের বর্তমান অফিশিয়াল ও সচল মডেল ব্যবহার করা হয়েছে
+        # নতুন এপিআই এবং নতুন ইউজারদের জন্য নির্ধারিত সঠিক মডেল
         response = client.models.generate_content(
-            model='gemini-2.5-flash-lite', 
+            model='gemini-2.5-flash', 
             contents=message.text,
         )
         bot.reply_to(message, response.text)
