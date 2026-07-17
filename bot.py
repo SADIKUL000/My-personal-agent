@@ -4,7 +4,7 @@ import telebot
 from google import genai
 from flask import Flask
 
-# Flask সেটআপ (Render-এর পোর্টের জন্য)
+# Flask সেটআপ
 app = Flask(__name__)
 
 @app.route('/')
@@ -21,25 +21,23 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
-# নতুন Gemini Client সেটআপ
+# Gemini Client সেটআপ
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 @bot.message_handler(func=lambda message: True)
 def reply_to_user(message):
     try:
-        # নতুন লাইব্রেরির নিয়ম অনুযায়ী মেসেজ পাঠানো
+        # আমরা এখানে নিশ্চিতভাবে কাজ করা মডেল 'gemini-1.5-flash' ব্যবহার করছি
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-1.5-flash',
             contents=message.text,
         )
         bot.reply_to(message, response.text)
     except Exception as e:
-        print(f"Error: {e}")
-        bot.reply_to(message, "দুঃখিত, একটু সমস্যা হয়েছে। আবার চেষ্টা করুন।")
+        # এবার যেকোনো সমস্যা হলে সেটা সরাসরি আপনার টেলিগ্রাম চ্যাটে মেসেজ চলে যাবে!
+        error_message = f"⚠️ দুঃখিত, জেমিনি এপিআই-তে সমস্যা হয়েছে।\n\nআসল এররটি হলো:\n`{str(e)}`"
+        bot.reply_to(message, error_message, parse_mode="Markdown")
 
 if __name__ == "__main__":
-    # Flask ব্যাকগ্রাউন্ডে চালু করা
     threading.Thread(target=run_flask, daemon=True).start()
-    
-    # টেলিগ্রাম বট চালু করা
     bot.infinity_polling()
