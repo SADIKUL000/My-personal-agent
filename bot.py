@@ -29,7 +29,7 @@ def reply_to_user(message):
     try:
         # গুগলের বর্তমান অফিশিয়াল ও সচল মডেল ব্যবহার করা হয়েছে
         response = client.models.generate_content(
-            model='gemini-2.5-flash', 
+            model='gemini-2.5-flash-lite', 
             contents=message.text,
         )
         bot.reply_to(message, response.text)
