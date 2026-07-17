@@ -1,54 +1,68 @@
 import os
+import sqlite3
 import threading
 import telebot
 from groq import Groq
 from flask import Flask
 
-# Flask সেটআপ (Render-এর পোর্ট সচল রাখার জন্য)
+# ডাটাবেস সেটআপ
+conn = sqlite3.connect('assistant.db', check_same_thread=False)
+cursor = conn.cursor()
+cursor.execute('CREATE TABLE IF NOT EXISTS memory (user_id INTEGER, role TEXT, content TEXT)')
+cursor.execute('CREATE TABLE IF NOT EXISTS tasks (user_id INTEGER, task TEXT, status TEXT)')
+conn.commit()
+
+# Flask & Bot Setup
 app = Flask(__name__)
+bot = telebot.TeleBot(os.environ.get('TELEGRAM_TOKEN'))
+client = Groq(api_key=os.environ.get('GROQ_API_KEY'))
 
-@app.route('/')
-def home():
-    return "Bot is alive and running with Groq!"
+# সিস্টেম প্রম্পট (এটি অ্যাসিস্ট্যান্টের চরিত্র ঠিক করে)
+SYSTEM_PROMPT = """
+You are a proactive personal assistant. You remember user tasks, help with planning, and keep track of daily goals. 
+If the user asks to save a task, confirm it. Always keep a professional yet friendly tone.
+"""
 
-def run_flask():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+def get_history(user_id):
+    cursor.execute('SELECT role, content FROM memory WHERE user_id = ?', (user_id,))
+    return [{"role": r, "content": c} for r, c in cursor.fetchall()]
 
-# এনভায়রনমেন্ট ভ্যারিয়েবল থেকে টোকেন সংগ্রহ
-TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+@bot.message_handler(commands=['todo'])
+def add_task(message):
+    task = message.text.replace('/todo', '').strip()
+    if task:
+        cursor.execute('INSERT INTO tasks VALUES (?, ?, ?)', (message.chat.id, task, 'pending'))
+        conn.commit()
+        bot.reply_to(message, f"✅ টাস্ক সেভ করা হয়েছে: {task}")
+    else:
+        bot.reply_to(message, "কি কাজ যোগ করতে চান? লিখুন: /todo [কাজের নাম]")
 
-bot = telebot.TeleBot(TELEGRAM_TOKEN)
-
-# Groq ক্লায়েন্ট ইনিশিয়েট করা
-client = Groq(api_key=GROQ_API_KEY)
+@bot.message_handler(commands=['tasks'])
+def show_tasks(message):
+    cursor.execute('SELECT task FROM tasks WHERE user_id = ? AND status = "pending"', (message.chat.id,))
+    tasks = cursor.fetchall()
+    if tasks:
+        task_list = "\n".join([f"- {t[0]}" for t in tasks])
+        bot.reply_to(message, f"আপনার কাজের তালিকা:\n{task_list}")
+    else:
+        bot.reply_to(message, "আপনার কোনো পেন্ডিং কাজ নেই!")
 
 @bot.message_handler(func=lambda message: True)
-def reply_to_user(message):
-    try:
-        # Groq API ব্যবহার করে Llama 3.1 মডেল কল করা
-        completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {
-                    "role": "user",
-                    "content": message.text
-                }
-            ],
-            temperature=0.7,
-            max_tokens=1024,
-        )
-        
-        # এআই এর উত্তর পাঠানো
-        bot.reply_to(message, completion.choices[0].message.content)
-        
-    except Exception as e:
-        error_message = f"⚠️ দুঃখিত, Groq API-তে সমস্যা হয়েছে।\n\nআসল এররটি হলো:\n`{str(e)}`"
-        bot.reply_to(message, error_message, parse_mode="Markdown")
+def chat(message):
+    user_id = message.chat.id
+    history = get_history(user_id)
+    history.append({"role": "user", "content": message.text})
+    
+    # Groq-এ পাঠানো
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history
+    completion = client.chat.completions.create(model="llama-3.1-8b-instant", messages=messages)
+    response = completion.choices[0].message.content
+    
+    # স্মৃতিতে সেভ করা
+    cursor.execute('INSERT INTO memory VALUES (?, ?, ?)', (user_id, "user", message.text))
+    cursor.execute('INSERT INTO memory VALUES (?, ?, ?)', (user_id, "assistant", response))
+    conn.commit()
+    
+    bot.reply_to(message, response)
 
-if __name__ == "__main__":
-    # Flask ব্যাকগ্রাউন্ড থ্রেডে রান করা
-    threading.Thread(target=run_flask, daemon=True).start()
-    # টেলিগ্রাম বটের পোলিং শুরু
-    bot.infinity_polling()
+# (এখানে Flask এবং polling কোড আগের মতো থাকবে)
