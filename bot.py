@@ -1,6 +1,6 @@
 import os
 import threading
-import requests
+from datetime import datetime, timedelta
 import telebot
 from groq import Groq
 from flask import Flask
@@ -9,71 +9,98 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Personal AI OS with Footwear Backward Planner is Active!"
+    return "Footwear AI OS Engine is Live!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
 
-# এনভায়রনমেন্ট ভ্যারিয়েবল সেটআপ
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 client = Groq(api_key=GROQ_API_KEY)
 
-# --- 🎯 ১. স্পেশালাইজড এজেন্ট: FOOTWEAR 80/20 PLANNER AGENT ---
-PLANNER_SYSTEM_PROMPT = """
-You are the "Footwear Production 80/20 Planner". Your job is to act as a highly experienced Production Planning & Control (PPC) Manager for footwear manufacturing.
+# --- 🎯 ১. স্পেশালাইজড এজেন্ট: REAL FOOTWEAR BACKWARD PLANNER ENGINE ---
+# স্ক্রিনশট অনুযায়ী ফিক্সড ডে-র মাস্টার ডিকশনারি (ক্যালকুলেশন সিকোয়েন্স ঠিক রাখার জন্য)
+TASK_LEAD_TIMES = [
+    ("Go ship", 0), # Base XF Date
+    ("Go prod", -27),
+    ("Go Indus: Passed", -29),
+    ("Go Indus: Start", -50),
+    ("CFM Sample: Validation", -50),
+    ("CFM Sample: ETD", -64),
+    ("CFM Sample: Start", -72),
+    ("F&R sample:Validation", -72),
+    ("F&R sample: End", -93),
+    ("F&R sample: Start", -100),
+    ("F&R Mold: Validation", -100),
+    ("F&R Mold: ETA", -107),
+    ("F&R Mold: Order", -177),
+    ("Proto: Validation", -177),
+    ("Proto: End", -184),
+    ("Proto: Start", -191),
+    ("Bulk Material: ETA", -198),
+    ("Bulk Material: Order", -288),
+    ("BOM: DKT Validation", -295),
+    ("Sample Mold: Validation", -295),
+    ("Sample Mold: ETA", -302),
+    ("Sample Mold: Order", -344),
+    ("Sample Received: Raw Materials", -351),
+    ("Sample Order: Raw Materials", -381),
+    ("Consumption, CBD (sharing)", -381),
+    ("Project Initiation", -381)
+]
 
-You will receive lists of tasks which include Running Tasks (Today's Deadlines) and Overdue Tasks from the factory's backward planning spreadsheet. 
-Your core responsibility is to apply the Pareto Principle (80/20 Rule):
-1. Extract the top 20% high-impact tasks that will prevent production line stoppage or sample delivery delays (e.g., BOM Validation, Consumption checks, Sample QA, Decathlon SOP compliance).
-2. De-prioritize the remaining 80% non-urgent administrative clutter.
-3. Generate a bulletproof, time-blocked action plan for the user in a clean Markdown table format.
-
-Tone: Professional, highly focused, industrial-grade, and action-oriented.
-"""
-
-def handle_80_20_planner(user_input):
+def generate_exact_backward_plan(project_name, xf_date_str):
     try:
-        completion = client.chat.completions.create(
+        # ডেট ফরম্যাট চেকিং (YYYY-MM-DD)
+        base_date = datetime.strptime(xf_date_str.strip(), "%Y-%m-%d")
+    except ValueError:
+        return "⚠️ ডেট ফরম্যাট সঠিক নয়! দয়া করে এভাবে লিখুন: `YYYY-MM-DD` (যেমন: `2027-04-22`)"
+
+    table_rows = []
+    table_rows.append(f"### 📊 Backward Plan for: **{project_name.upper()}**")
+    table_rows.append(f"📅 **Base XF Date:** {xf_date_str}\n")
+    table_rows.append("| SL | Task Name | Target Date | WK No | Status |")
+    table_rows.append("|---|---|---|---|---|")
+
+    for idx, (task, days) in enumerate(TASK_LEAD_TIMES, start=1):
+        target_date = base_date + timedelta(days=days)
+        date_str = target_date.strftime("%m/%d/%Y")
+        week_num = target_date.isocalendar()[1]
+        table_rows.append(f"| {idx} | {task} | {date_str} | {week_num} | Pending 🕒 |")
+
+    # হাই-লেভেল প্ল্যানিং সামারি দেওয়ার জন্য Llama 3.1 কে কল করা
+    raw_table = "\n".join(table_rows)
+    try:
+        summary_completion = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
-                {"role": "user", "content": f"Analyze my current footwear planning status and give me the 20% core focus and daily plan: \n\n{user_input}"}
+                {"role": "system", "content": "You are a Footwear Production Planner. Analyze the provided timeline table and highlight 3 critical paths (like Mold Order or Bulk Material Order Deadlines) with quick actionable tips. Keep it extremely brief and professional."},
+                {"role": "user", "content": raw_table}
             ],
             temperature=0.3,
-            max_tokens=1500
+            max_tokens=500
         )
-        return completion.choices[0].message.content
-    except Exception as e:
-        return f"⚠️ Planner Agent প্রসেস করতে পারেনি। এরর: {str(e)}"
+        ai_summary = summary_completion.choices[0].message.content
+    except:
+        ai_summary = "*(Summary could not be generated, but your chart is ready below)*"
 
-# --- ⚙️ ২. অন্য এজেন্টদের ডামি ফাংশন (ভবিষ্যতের জন্য) ---
-def handle_workplace_execution(message):
-    return "👟 [Workplace Execution Agent]: (BOM Creation / Consumption ক্যালকুলেশন অটোমেশনের জন্য এটি পরবর্তী ধাপে তৈরি হবে)।"
-
-def handle_knowledge_base(message):
-    return "📚 [Knowledge Base Agent]: (Decathlon SOP / Material Library এর সাথে কানেক্ট করার জন্য এটি তৈরি হবে)।"
+    return f"{raw_table}\n\n### 🧠 Planner Agent 80/20 Insights:\n{ai_summary}"
 
 
-# --- 🧠 ৩. মাস্টার এজেন্টের প্রম্পট (Router Logic) ---
+# --- 🧠 ২. মাস্টার এজেন্টের প্রম্পট (Router Logic) ---
 MASTER_ROUTER_PROMPT = """
-You are the "Master AI OS Router". Your job is to classify the incoming message into exactly ONE of the three categories:
-1. PLANNER
-2. WORKPLACE_EXECUTION
-3. KNOWLEDGE_BASE
+You are the "Master AI OS Router". Your only job is to classify the user's input into exactly ONE category:
+1. PLANNER (If they mention 'new project', 'new article', 'backward plan', 'XF Date', 'style plan', or want to calculate a timeline schedule).
+2. WORKPLACE_EXECUTION (If they want to audit a raw BOM sheet text, check material consumption formulas, or write code).
+3. KNOWLEDGE_BASE (If they ask for Decathlon SOP manuals, file reference, or company rules).
 
-Guidelines:
-- PLANNER: Choose this if the message contains lists of tasks, daily schedules, alerts about running/overdue tasks, updates from the Google Sheet planner, or general routine building.
-- WORKPLACE_EXECUTION: Choose this if the user wants to execute specific technical footwear calculations right now (e.g., 'Validate this BOM text', 'Calculate wastage from leather sheet').
-- KNOWLEDGE_BASE: Choose this if the message is asking for references, Decathlon SOP guidelines, or material standard specifications.
-
-CRITICAL: Your response must be ONLY one word: 'PLANNER', 'WORKPLACE_EXECUTION', or 'KNOWLEDGE_BASE'. Do not add any punctuation or explanation.
+CRITICAL: Output ONLY the word 'PLANNER', 'WORKPLACE_EXECUTION', or 'KNOWLEDGE_BASE'. Do not add any punctuation or intro.
 """
 
-# --- 🚀 ৪. মূল মেসেজ হ্যান্ডলার ---
+# --- 🚀 ৩. মূল মেসেজ হ্যান্ডলার ---
 @bot.message_handler(func=lambda message: True)
 def master_routing_agent(message):
     user_input = message.text
@@ -92,18 +119,32 @@ def master_routing_agent(message):
         
         decision = routing_completion.choices[0].message.content.strip().upper()
         
-        # সিদ্ধান্ত অনুযায়ী সঠিক এজেন্টের ফাংশน কল করা হচ্ছে
+        # ১. প্ল্যানার এজেন্ট এক্টিভেশন লজিক
         if "PLANNER" in decision:
-            planner_output = handle_80_20_planner(user_input)
-            response_text = f"📊 **[80/20 Footwear Planner Agent]**\n\n{planner_output}"
+            # ইউজার ইনপুট থেকে সহজ উপায়ে প্রজেক্ট নাম এবং ডেট আলাদা করার প্রম্পট
+            extraction_prompt = (
+                f"Extract the Project/Article Name and the XF Date (in YYYY-MM-DD format) from this text: '{user_input}'. "
+                "Respond in exactly this format: Name | YYYY-MM-DD. Nothing else."
+            )
+            ext_completion = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[{"role": "user", "content": extraction_prompt}],
+                temperature=0.0
+            )
+            
+            extracted_data = ext_completion.choices[0].message.content.strip()
+            
+            if "|" in extracted_data:
+                proj_name, xf_date = extracted_data.split("|")
+                response_text = generate_exact_backward_plan(proj_name.strip(), xf_date.strip())
+            else:
+                response_text = "⚠️ আমি প্রজেক্টের নাম বা XF Date সঠিকভাবে বুঝতে পারছি না। দয়া করে এভাবে লিখুন:\n`New Project: Sneaker-01, XF Date: 2027-04-22`"
             
         elif "WORKPLACE_EXECUTION" in decision:
-            agent_reply = handle_workplace_execution(user_input)
-            response_text = f"🤖 **Master Router:** এই কাজটি **Workplace Execution** এর আওতাভুক্ত।\n\n{agent_reply}"
+            response_text = "🤖 **Master Router:** [Workplace Execution Agent] এর কাজ পরবর্তী ধাপে ডেভেলপ করা হবে।"
             
         elif "KNOWLEDGE_BASE" in decision:
-            agent_reply = handle_knowledge_base(user_input)
-            response_text = f"🤖 **Master Router:** এই কাজটি **Knowledge Base** এর আওতাভুক্ত।\n\n{agent_reply}"
+            response_text = "🤖 **Master Router:** [Knowledge Base Agent] এর কাজ পরবর্তী ধাপে ডেভেলপ করা হবে।"
             
         else:
             response_text = "⚠️ মাস্টার এজেন্ট কাজটি ক্যাটাগরাইজ করতে পারেনি। অনুগ্রহ করে স্পষ্ট করে লিখুন।"
