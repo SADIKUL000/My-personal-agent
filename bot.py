@@ -27,9 +27,9 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 @bot.message_handler(func=lambda message: True)
 def reply_to_user(message):
     try:
-        # নতুন লাইব্রেরির স্ট্যান্ডার্ড অনুযায়ী সরাসরি মডেলের নাম ব্যবহার
+        # নতুন ইউজারদের জন্য সম্পূর্ণ ফ্রি এবং অ্যাক্টিভ মডেল
         response = client.models.generate_content(
-            model='gemini-2.5-flash',  # অথবা 'gemini-1.5-flash'
+            model='gemini-2.5-flash', 
             contents=message.text,
         )
         bot.reply_to(message, response.text)
