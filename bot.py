@@ -27,14 +27,13 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 @bot.message_handler(func=lambda message: True)
 def reply_to_user(message):
     try:
-        # আমরা এখানে নিশ্চিতভাবে কাজ করা মডেল 'gemini-1.5-flash' ব্যবহার করছি
+        # নতুন লাইব্রেরির স্ট্যান্ডার্ড অনুযায়ী সরাসরি মডেলের নাম ব্যবহার
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-2.5-flash',  # অথবা 'gemini-1.5-flash'
             contents=message.text,
         )
         bot.reply_to(message, response.text)
     except Exception as e:
-        # এবার যেকোনো সমস্যা হলে সেটা সরাসরি আপনার টেলিগ্রাম চ্যাটে মেসেজ চলে যাবে!
         error_message = f"⚠️ দুঃখিত, জেমিনি এপিআই-তে সমস্যা হয়েছে।\n\nআসল এররটি হলো:\n`{str(e)}`"
         bot.reply_to(message, error_message, parse_mode="Markdown")
 
