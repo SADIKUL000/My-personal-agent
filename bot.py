@@ -27,15 +27,23 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 @bot.message_handler(func=lambda message: True)
 def reply_to_user(message):
     try:
-        # এখানে আমরা জেমিনির লেটেস্ট এবং রিকমেন্ডেড 'gemini-2.5-flash' মডেল ব্যবহার করছি
+        # কোনো স্পেসিফিক ভার্সন ছাড়াই নতুনদের জন্য গুগলের ডিফল্ট ফ্রি মডেল কল করা
         response = client.models.generate_content(
             model='gemini-2.5-flash', 
             contents=message.text,
         )
         bot.reply_to(message, response.text)
     except Exception as e:
-        error_message = f"⚠️ দুঃখিত, জেমিনি এপিআই-তে সমস্যা হয়েছে।\n\nআসল এররটি হলো:\n`{str(e)}`"
-        bot.reply_to(message, error_message, parse_mode="Markdown")
+        # যদি ওপরের মডেলে তাও সমস্যা করে, তবে এটি অটোমেটিক ব্যাকআপ ২.০ মডেলে ট্রাই করবে
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=message.text,
+            )
+            bot.reply_to(message, response.text)
+        except Exception as backup_error:
+            error_message = f"⚠️ দুঃখিত, জেমিনি এপিআই-তে সমস্যা হয়েছে।\n\nআসল এররটি হলো:\n`{str(backup_error)}`"
+            bot.reply_to(message, error_message, parse_mode="Markdown")
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
